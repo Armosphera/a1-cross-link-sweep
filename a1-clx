@@ -30,26 +30,44 @@ WORKFLOW = HERE / "workflow.py"
 
 
 def _resolve_repo(args) -> str:
-    """Resolve target repo from CLI > env > default."""
     if args.target_repo:
         return args.target_repo
     return os.environ.get("A1_CLX_TARGET_REPO", "Armosphera/autoresearch-sboss")
 
 
 def _resolve_token(args) -> str | None:
-    if args.token:
-        return args.token
-    env = os.environ.get("GH_TOKEN_ARMOSPHERA") or os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
-    if env:
-        return env
-    # Fall back to gh CLI
-    try:
-        r = subprocess.run(["gh", "auth", "token", "--user", "Armosphera"],
-                          capture_output=True, text=True, check=False)
-        if r.returncode == 0 and r.stdout.strip():
-            return r.stdout.strip()
-    except FileNotFoundError:
-        pass
+    """Token resolution order (first non-empty wins):
+       1. --token CLI flag
+       2. $GH_TOKEN_ARMOSPHERA
+       3. $GITHUB_TOKEN
+       4. $GH_TOKEN
+       5. gh CLI: `gh auth token --user Armosphera`
+       6. gh CLI: `gh auth token` (active account)
+
+    We intentionally try gh CLI LAST because if env vars are set but empty,
+    we should still prefer the well-tested CLI fallback over an empty string.
+    """
+    candidates = [
+        args.token,
+        os.environ.get("GH_TOKEN_ARMOSPHERA"),
+        os.environ.get("GITHUB_TOKEN"),
+        os.environ.get("GH_TOKEN"),
+    ]
+    for c in candidates:
+        if c and c.strip():
+            return c.strip()
+
+    # Try gh CLI as fallback
+    for gh_args in (["--user", "Armosphera"], []):
+        try:
+            r = subprocess.run(
+                ["gh", "auth", "token", *gh_args],
+                capture_output=True, text=True, check=False,
+            )
+            if r.returncode == 0 and r.stdout.strip():
+                return r.stdout.strip()
+        except FileNotFoundError:
+            return None
     return None
 
 

@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+"""a1-clx — standalone CLI entry-point for the A1 cross-link-sweep.
+
+Usage:
+  a1-clx eval                       # compute current score (22/22 expected)
+  a1-clx sweep                      # re-run the sweep (commits any drift back)
+  a1-clx verify                     # read-only check of which files are dirty
+  a1-clx --target-repo OWNER/REPO   # override target (default: Armosphera/autoresearch-sboss)
+  a1-clx --token TOKEN              # override GitHub token
+
+Exit codes:
+  0  — all clean (score = 22/22)
+  1  — drift detected (run 'a1-clx sweep' to fix)
+  2  — runtime error (missing token, network, etc.)
+
+This is a thin wrapper around eval.py + workflow.py from the original
+Karpathy-pattern harness (Karpathy, 2026 — keep-or-revert loop).
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+EVAL = HERE / "eval.py"
+WORKFLOW = HERE / "workflow.py"
+
+
+def _resolve_repo(args) -> str:
+    """Resolve target repo from CLI > env > default."""
+    if args.target_repo:
+        return args.target_repo
+    return os.environ.get("A1_CLX_TARGET_REPO", "Armosphera/autoresearch-sboss")
+
+
+def _resolve_token(args) -> str | None:
+    if args.token:
+        return args.token
+    env = os.environ.get("GH_TOKEN_ARMOSPHERA") or os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if env:
+        return env
+    # Fall back to gh CLI
+    try:
+        r = subprocess.run(["gh", "auth", "token", "--user", "Armosphera"],
+                          capture_output=True, text=True, check=False)
+        if r.returncode == 0 and r.stdout.strip():
+            return r.stdout.strip()
+    except FileNotFoundError:
+        pass
+    return None
+
+
+def cmd_eval(args) -> int:
+    env = os.environ.copy()
+    if args.target_repo:
+        env["A1_CLX_TARGET_REPO"] = args.target_repo
+    tok = _resolve_token(args)
+    if tok:
+        env["GH_TOKEN_ARMOSPHERA"] = tok
+    r = subprocess.run([sys.executable, str(EVAL)], cwd=str(HERE), env=env)
+    return r.returncode
+
+
+def cmd_sweep(args) -> int:
+    env = os.environ.copy()
+    if args.target_repo:
+        env["A1_CLX_TARGET_REPO"] = args.target_repo
+    tok = _resolve_token(args)
+    if tok:
+        env["GH_TOKEN_ARMOSPHERA"] = tok
+    print("=== Running sweep (will commit any drift back to source) ===")
+    r = subprocess.run([sys.executable, str(WORKFLOW)], cwd=str(HERE), env=env)
+    if r.returncode != 0:
+        return r.returncode
+    print("\n=== Re-evaluating after sweep ===")
+    r2 = subprocess.run([sys.executable, str(EVAL)], cwd=str(HERE), env=env)
+    return r2.returncode
+
+
+def cmd_verify(args) -> int:
+    env = os.environ.copy()
+    if args.target_repo:
+        env["A1_CLX_TARGET_REPO"] = args.target_repo
+    tok = _resolve_token(args)
+    if tok:
+        env["GH_TOKEN_ARMOSPHERA"] = tok
+    r = subprocess.run([sys.executable, str(WORKFLOW), "--verify"], cwd=str(HERE), env=env)
+    return r.returncode
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        prog="a1-clx",
+        description="A1 cross-link-sweep — keep 22 program.md files pointing at the right source repo.",
+    )
+    parser.add_argument("--target-repo", help="Override target repo (default: Armosphera/autoresearch-sboss)")
+    parser.add_argument("--token", help="GitHub token (default: gh CLI / env)")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    p_eval = sub.add_parser("eval", help="Compute score (read-only)")
+    p_eval.set_defaults(func=cmd_eval)
+
+    p_sweep = sub.add_parser("sweep", help="Re-run sweep (commits drift back)")
+    p_sweep.set_defaults(func=cmd_sweep)
+
+    p_verify = sub.add_parser("verify", help="List dirty files (read-only)")
+    p_verify.set_defaults(func=cmd_verify)
+
+    args = parser.parse_args()
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

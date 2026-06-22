@@ -1,116 +1,95 @@
-# AGENTS.md — A1-portfolio (cross-repo documentation)
+# AGENTS.md — a1-cross-link-sweep
 
-This file applies to every agent (human or AI) that touches the `armosphera/A1-portfolio`
-repository. It extends, and never weakens, the global rules in this same repo's
-`LICENSING.md`, `ARCHITECTURE.md`, and `SECURITY.md`.
+This file applies to every agent (human or AI) that touches the
+`armosphera/a1-cross-link-sweep` repository. It extends, and never weakens, the
+global rules in `https://github.com/Armosphera/A1-portfolio/blob/main/LICENSING.md`.
 
-## 1. What this repo is — and isn't
+## 1. What this repo is
 
-`A1-portfolio` is the **cross-repo documentation source of truth** for the entire A1
-product family. It contains:
+`a1-cross-link-sweep` is a **one-shot tooling repo** for the SamStep74 →
+Armosphera account migration. It:
 
-- `README.md` — repo index grouped by layer (Engine / Application / Reference)
-- `LICENSING.md` — license matrix across all 9 repos
-- `ARCHITECTURE.md` — layer cake, data flow, open portfolio questions
-- `SECURITY.md` — vulnerability reporting, severity SLAs
+- Scans all armosphera/* repos for cross-account links (e.g. README referencing `SamStep74/...`)
+- Reports a per-repo list of "dirty" links (lines that need to be updated)
+- Provides a `sweep` mode that rewrites the links to point at the armosphera mirror
+- Used once during the public→private migration (Wave 13, 2026-06-21)
 
-**This repo has no code, no tests, no CI.** It's documentation. Edits here are edits
-to the *portfolio* — they ripple by being read by humans and agents in every other repo.
+This is **not** a service, **not** a product. It's a development tool that
+runs against the A1 portfolio and then gets archived (or kept around for
+future similar migrations).
 
-## 2. When to edit this repo
+## 2. The 2 protected files
 
-Touch this repo whenever:
+- **`package.json` `"private": true`** — this package is not on npm by design.
+- **`sweep.config.json`** — the cross-account patterns (SamStep74/*, A1-*/SamStep74).
 
-1. You add a new A1 repo → update the **Repo index** in `README.md` and the layer cake
-   in `ARCHITECTURE.md`.
-2. You change a license in any repo → update the matrix in `LICENSING.md`. (Per the
-   file's preamble: "If a repo's `LICENSE` file disagrees with this document, the
-   `LICENSE` file wins — but please open an issue so we can resolve the drift.")
-3. You introduce a new cross-repo invariant (e.g. a new pinned SHA, a new eval lane
-   contract, a new sovereignty constraint) → document it in `ARCHITECTURE.md` and link
-   from `SECURITY.md` if it touches security posture.
-4. You change release / tagging convention → update `docs/RELEASE-PROCESS.md` (TODO —
-   does not exist yet).
-5. You change which repo is canonical for a domain → update `docs/PRODUCTS.md` (TODO).
+These should not be edited without an operator OK. New migration patterns
+should be added to `sweep.config.json` (the list of dirty prefixes to scan for).
 
-## 3. The 4 files you must keep coherent
+## 3. Workflow — TDD where applicable
 
-These are the load-bearing docs. **All four must agree on the canonical repo list.**
+The repo ships with **unit tests** for the cross-link scanner logic:
 
-- `README.md` — repo index
-- `LICENSING.md` — license matrix table
-- `ARCHITECTURE.md` — layer cake (must show the same repos)
-- `SECURITY.md` — supported versions table
+1. Tests live in `test/sweep.test.js` (or `test/`).
+2. New sweep patterns should come with a test fixture.
+3. Run `npm test` before opening a PR.
 
-If you add a repo, edit all 4. If you deprecate a repo, edit all 4 + open an issue.
+## 4. CLI Usage
 
-## 4. Conventional Commits
+```bash
+# Scan only (report, don't modify)
+node bin/sweep.js --scan
 
-```
-<type>(<scope>): <description>
+# Apply (modify files in place)
+node bin/sweep.js --apply
 
-<optional body>
+# Specific repos only
+node bin/sweep.js --scan --repos=A1-AI-Core,A1-Localization-AM
 ```
 
-Allowed types: `docs`, `chore`, `feat` (for new docs sections), `fix` (typos /
-wrong claims), `refactor` (restructuring existing docs).
+## 5. Adding a new migration pattern
 
-- Subject line ≤72 chars, imperative mood, no trailing period.
-- Body explains **why**, not **what** (the diff shows the what).
+1. Edit `sweep.config.json` to add the new dirty pattern
+2. Add a fixture in `test/fixtures/`
+3. Add a test in `test/sweep.test.js`
+4. Verify: `node bin/sweep.js --scan` reports expected matches
 
-## 5. No Code, No Secrets
+## 6. No secrets, no customer data
 
-- This repo has no source code, no tests, no CI. **Don't add any.**
-- No secrets, no API keys, no customer data. If you find one in a PR, reject and rotate.
+- This repo has no API keys, no customer data, no production secrets.
+- It runs against public GitHub URLs only (no auth required for public repos).
 
-## 6. Markdown Discipline
+## 7. Files, Functions, Nesting
 
-- One H1 per file. Use H2 for sections, H3 for subsections.
-- Code blocks must specify language: ` ```bash `, ` ```js `, ` ```python `, etc.
-- Tables use GitHub-flavored markdown alignment (left for text, right for numbers).
-- Internal links use relative paths (`./LICENSING.md`), external links use full URLs.
-- Line length ≤120 chars (Markdown doesn't hard-wrap but keep readable in raw view).
-
-## 7. Drift Detection (TODO)
-
-This repo should grow a CI check that:
-
-- Compares the repo index in `README.md` against the actual list of repos in the
-  `armosphera` org.
-- Compares the license matrix in `LICENSING.md` against each repo's `LICENSE` file.
-- Compares the architecture layer cake in `ARCHITECTURE.md` against the actual repo
-  descriptions.
-
-Add as a Karpathy eval lane: `portfolio-drift-contract`.
+- One concept per file (e.g. `scanner.js`, `rewriter.js`).
+- Functions <50 lines, single responsibility.
+- No nesting deeper than 4 levels.
 
 ## 8. Day-One Checklist
 
 ```
 1. cat AGENTS.md             # this file
-2. cat README.md             # current repo index
-3. cat LICENSING.md          # current license matrix
-4. cat ARCHITECTURE.md       # current layer cake
-5. cat SECURITY.md           # current policy
-6. Now edit — keep all 4 in sync.
+2. cat README.md             # what the tool does
+3. cat package.json          # dependencies + scripts
+4. cat sweep.config.json     # the dirty patterns
+5. npm install && npm test   # confirm baseline green
+6. Now you can edit.
 ```
 
-## 9. Roadmap Items (Track Here)
+If `npm test` baseline fails: STOP, file an issue. Do not edit around a
+broken baseline.
 
-The following are **known portfolio gaps** that this repo will track:
+## 9. Day-One Checklist (after migration)
 
-- [ ] `docs/CONTRIBUTING.md` — how to file issues against the right repo
-- [ ] `docs/RELEASE-PROCESS.md` — how releases are cut (tag, notes, publishing)
-- [ ] `docs/PRODUCTS.md` — naming matrix: which repo is canonical for X
-- [ ] AGPL-3.0 dual-license migration for engines (2026 H2)
-- [ ] Portfolio drift CI (drift between docs and actual repos)
-- [ ] Cross-repo evaluation report (which repos have AGENTS.md, program.md,
-      .orchestration/, Karpathy eval lanes — vs which don't)
+This repo is **done** (used once for Wave 13). If you find yourself editing
+it, ask: should this be a one-shot script in `armosphera/A1-portfolio`
+instead? If yes, move it there and archive this repo.
 
 ## 10. Ownership
 
-**Armosphera LLC** · contact: ops@a1-suite.local · security: ops@a1-suite.local
+**Armosphera LLC** · contact: ops@a1-suite.local
 
 ---
 
-*Adapted from `armosphera/SBOS-A1-ERP/AGENTS.md`. Specializes for "this repo IS the
-documentation." License: Proprietary (`LicenseRef-Armosphera-Proprietary`). See `LICENSE`.*
+*Adapted from `armosphera/SBOS-A1-ERP/AGENTS.md`. Specializes for "this is a one-shot
+tooling repo, not a service." License: MIT (operator's choice for tooling — see LICENSE).*

@@ -85,3 +85,28 @@ Copyright © 2026 Armosphera LLC. All rights reserved. See [\`LICENSE\`](./LICEN
 - [\`karpathy/autoresearch\`](https://github.com/karpathy/autoresearch) — the original keep-or-revert loop pattern.
 - [\`Armosphera/autoresearch-sboss\`](https://github.com/Armosphera/autoresearch-sboss) — the SBOSS workflows this loop maintains.
 - [\`Armosphera/A1-portfolio\`](https://github.com/Armosphera/A1-portfolio) — portfolio-level docs + the health-check that depends on this loop.
+
+
+## Relationship to `autoresearch-sboss/examples/cross-link-sweep/`
+
+This standalone repo (a1-cross-link-sweep) and the original
+`Armosphera/autoresearch-sboss/examples/cross-link-sweep/` directory look
+similar but serve **different consumers**:
+
+| Aspect | `a1-cross-link-sweep` (this repo) | `autoresearch-sboss/examples/cross-link-sweep/` |
+|---|---|---|
+| Purpose | Standalone CLI for ad-hoc sweeps by a developer | CI gate (Karpathy loop) integrated with autoresearch-sboss CI |
+| Entry point | `a1-clx` shell script | Direct invocation of `workflow.py` |
+| Consumers | Manual: `a1-clx verify` / `a1-clx sweep` | CI workflow + orchestration tools |
+| Tolerates empty env vars | Yes (falls back to `gh` CLI) | No — CI sets them explicitly |
+| Mutable | `a1-clx`, `program.md`, `workflow.py` | `workflow.py`, `program.md` only |
+
+**They are not duplicates.** This repo is the developer-facing CLI; the
+other is the autoresearch-pattern reference implementation. The `workflow.py`
+and `eval.py` files are kept in sync manually (last sync: 2026-06-22).
+
+**When to use which**:
+- Running the sweep yourself → `a1-clx verify` (this repo)
+- Adding a new Karpathy eval pattern to autoresearch-sboss → copy from
+  `examples/cross-link-sweep/` and modify
+- Production CI gate → use the autoresearch-sboss workflow
